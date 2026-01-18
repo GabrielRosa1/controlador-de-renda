@@ -31,7 +31,7 @@ export default function Works() {
   const defaultEnd = useMemo(() => addDaysISO(defaultStart, 13), [defaultStart]);
 
   const [title, setTitle] = useState("");
-  const [sprint, setSprint] = useState("Sprint 6");
+  const [sprint, setSprint] = useState("");
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
   const [rate, setRate] = useState(3500);

@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Works from "./pages/Works";
 import WorkDetail from "./pages/WorkDetail";
 import Dashboard from "./pages/Dashboard";
+import Register from "./pages/Register";
 
 function isAuthed() {
   return Boolean(localStorage.getItem("access_token"));
@@ -64,6 +65,7 @@ export default function App() {
 
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/works" element={<Protected><Works /></Protected>} />
         <Route path="/works/:id" element={<Protected><WorkDetail /></Protected>} />

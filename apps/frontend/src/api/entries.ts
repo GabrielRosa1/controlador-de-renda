@@ -4,7 +4,14 @@ export type TimerStateResponse = {
   running: boolean;
   started_at?: string | null;
   total_closed_seconds: number;
+
+  is_finished: boolean;
+  blocked_reason?: "CLOSED" | "EXPIRED" | null;
+
+  end_date?: string | null;
+  closed_at?: string | null;
 };
+
 
 export type TimeEntryItem = {
   id: string;

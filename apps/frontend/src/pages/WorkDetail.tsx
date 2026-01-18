@@ -3,14 +3,26 @@ import { useParams } from "react-router-dom";
 import { startTimer, stopTimer } from "../api/timer";
 import { listWorks } from "../api/works";
 import { getEntries, getTimerState } from "../api/entries";
-import { formatHMS, formatMoneyBRL } from "../lib/format";
-import type { TimeEntryItem } from "../api/entries";
+import type { TimeEntryItem, TimerStateResponse } from "../api/entries";
 import { closeWork } from "../api/workClose";
-
+import { formatHMS, formatMoneyBRL } from "../lib/format";
 
 function formatDateTime(dt: string) {
   const d = new Date(dt);
   return d.toLocaleString("pt-BR");
+}
+
+function badgeClass(running: boolean) {
+  return running
+    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+    : "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200";
+}
+
+function finishedLabel(state: { is_finished: boolean; blocked_reason?: string | null; end_date?: string | null }) {
+  if (!state.is_finished) return null;
+  if (state.blocked_reason === "EXPIRED") return state.end_date ? `Prazo final: ${state.end_date}` : "Prazo final atingido";
+  if (state.blocked_reason === "CLOSED") return "Encerrado manualmente";
+  return "Finalizado";
 }
 
 export default function WorkDetail() {
@@ -31,6 +43,8 @@ export default function WorkDetail() {
   const [tick, setTick] = useState(0);
   const intervalRef = useRef<number | null>(null);
 
+  const [timerState, setTimerState] = useState<TimerStateResponse | null>(null);
+
   async function refreshAll() {
     setErr(null);
     setLoading(true);
@@ -43,6 +57,7 @@ export default function WorkDetail() {
       }
 
       const state = await getTimerState(workId);
+      setTimerState(state);
       setRunning(state.running);
       setStartedAt(state.started_at ?? null);
       setTotalClosedSeconds(state.total_closed_seconds);
@@ -89,104 +104,195 @@ export default function WorkDetail() {
     return Math.round(rateCents * (currentSessionSeconds / 3600));
   }, [rateCents, currentSessionSeconds]);
 
-  async function onStart() {
-  try {
-    await startTimer(workId);
-  } catch (e: any) {
-    alert(typeof e?.detail === "string" ? e.detail : "Esse trabalho já terminou");
-  }
-  await refreshAll();
-}
+  const isFinished = Boolean(timerState?.is_finished);
+  const finishHint = timerState ? finishedLabel(timerState) : null;
 
+  async function onStart() {
+    try {
+      await startTimer(workId);
+    } catch (e: any) {
+      alert(typeof e?.detail === "string" ? e.detail : "Esse trabalho já terminou");
+    }
+    await refreshAll();
+  }
 
   async function onStop() {
     await stopTimer(workId);
     await refreshAll();
   }
 
+  async function onCloseWork() {
+    const reason = (prompt("Motivo (opcional):") ?? "").trim() || null;
+    try {
+      await closeWork(workId, reason);
+    } finally {
+      await refreshAll();
+    }
+  }
+
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-        <h2 style={{ margin: 0 }}>{title}</h2>
-        <div style={{ opacity: 0.8 }}>{formatMoneyBRL(rateCents)}/h</div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">{title}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(running)}`}>
+              {running ? "Rodando" : "Parado"}
+            </span>
+            {isFinished ? (
+              <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200">
+                Finalizado
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="text-sm text-zinc-600">
+          <span className="font-medium text-zinc-900">{formatMoneyBRL(rateCents)}</span>
+          <span className="text-zinc-500">/h</span>
+        </div>
       </div>
 
-      {loading ? <div>Carregando...</div> : null}
-      {err ? <div style={{ color: "crimson" }}>{err}</div> : null}
+      {/* Alerts */}
+      {loading ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">Carregando…</div>
+      ) : null}
 
-      <div style={{ padding: 16, border: "1px solid #ddd", borderRadius: 16 }}>
-        <div style={{ opacity: 0.7, marginBottom: 6 }}>Cronômetro do trabalho (acumulado)</div>
-        <div style={{ fontSize: 44, fontWeight: 800 }}>{formatHMS(totalSeconds)}</div>
+      {err ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{err}</div>
+      ) : null}
 
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
+      {isFinished ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+          <div className="text-sm font-semibold text-rose-800">Esse trabalho já terminou</div>
+          {finishHint ? <div className="mt-1 text-sm text-rose-700">{finishHint}</div> : null}
+        </div>
+      ) : null}
+
+      {/* Timer Card */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4">
           <div>
-            <div style={{ opacity: 0.7 }}>Total a receber</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{formatMoneyBRL(totalEarnedCents)}</div>
-          </div>
-
-          <div>
-            <div style={{ opacity: 0.7 }}>Sessão atual</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>
-              {formatHMS(currentSessionSeconds)} • {formatMoneyBRL(currentSessionEarnedCents)}
+            <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">Cronômetro do trabalho</div>
+            <div className="mt-1 font-mono text-4xl font-semibold tracking-tight text-zinc-900">
+              {formatHMS(totalSeconds)}
             </div>
           </div>
 
-          <div>
-            <div style={{ opacity: 0.7 }}>Status</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{running ? "Rodando" : "Parado"}</div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="text-xs font-medium text-zinc-500">Total a receber</div>
+              <div className="mt-1 text-lg font-semibold text-zinc-900">{formatMoneyBRL(totalEarnedCents)}</div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="text-xs font-medium text-zinc-500">Sessão atual</div>
+              <div className="mt-1 text-lg font-semibold text-zinc-900">
+                {formatHMS(currentSessionSeconds)}
+              </div>
+              <div className="mt-0.5 text-sm text-zinc-600">{formatMoneyBRL(currentSessionEarnedCents)}</div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="text-xs font-medium text-zinc-500">Início</div>
+              <div className="mt-1 text-sm font-medium text-zinc-900">
+                {running && startedAt ? formatDateTime(startedAt) : "—"}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {!running ? (
+                <button
+                  onClick={onStart}
+                  disabled={isFinished}
+                  className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Start
+                </button>
+              ) : (
+                <button
+                  onClick={onStop}
+                  className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+                >
+                  Stop
+                </button>
+              )}
+
+              <button
+                onClick={refreshAll}
+                className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50"
+              >
+                Atualizar
+              </button>
+
+              <button
+                onClick={onCloseWork}
+                className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-800 shadow-sm transition hover:bg-rose-100"
+              >
+                Encerrar trabalho
+              </button>
+            </div>
+
+            <div className="text-xs text-zinc-500">
+              Total inclui todas as sessões + sessão atual (se estiver rodando).
+            </div>
           </div>
         </div>
-
-        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          {!running ? (
-            <button onClick={onStart}>Start</button>
-          ) : (
-            <button onClick={onStop}>Stop</button>
-          )}
-          <button
-            onClick={async () => {
-                const reason = prompt("Motivo (opcional):") ?? null;
-                await closeWork(workId, reason);
-                await refreshAll();
-            }}
-            style={{ opacity: 0.9 }}
-            >
-            Encerrar trabalho
-            </button>
-
-          <button onClick={refreshAll} style={{ opacity: 0.9 }}>
-            Atualizar
-          </button>
-        </div>
-
-        {running && startedAt ? (
-          <div style={{ marginTop: 10, opacity: 0.7 }}>Iniciado em: {formatDateTime(startedAt)}</div>
-        ) : null}
       </div>
 
-      <div style={{ marginTop: 4 }}>
-        <h3>Logs de sessões</h3>
+      {/* Entries */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-semibold text-zinc-900">Logs de sessões</h2>
+          <div className="text-xs text-zinc-500">{entries.length} registros</div>
+        </div>
+
         {entries.length === 0 ? (
-          <div style={{ opacity: 0.7 }}>Nenhuma sessão ainda.</div>
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
+            Nenhuma sessão ainda.
+          </div>
         ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            {entries.map((e) => (
-              <div key={e.id} style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{formatHMS(e.duration_seconds)}</div>
-                    <div style={{ opacity: 0.7 }}>
-                      {formatDateTime(e.started_at)} {e.ended_at ? `→ ${formatDateTime(e.ended_at)}` : "→ (rodando)"}
+          <div className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            {entries.map((e) => {
+              const earned = e.ended_at ? Math.round(rateCents * (e.duration_seconds / 3600)) : 0;
+              return (
+                <div key={e.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                      <div className="font-mono text-sm font-semibold text-zinc-900">{formatHMS(e.duration_seconds)}</div>
+                      {!e.ended_at ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+                          Rodando
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 truncate text-sm text-zinc-600">
+                      {formatDateTime(e.started_at)}{" "}
+                      {e.ended_at ? `→ ${formatDateTime(e.ended_at)}` : "→ (em andamento)"}
                     </div>
                   </div>
-                  <div style={{ textAlign: "right", opacity: 0.9 }}>
-                    {e.ended_at ? formatMoneyBRL(Math.round(rateCents * (e.duration_seconds / 3600))) : ""}
+
+                  <div className="shrink-0 text-right">
+                    {e.ended_at ? (
+                      <div className="text-sm font-semibold text-zinc-900">{formatMoneyBRL(earned)}</div>
+                    ) : (
+                      <div className="text-sm text-zinc-500">—</div>
+                    )}
+                    <div className="text-xs text-zinc-500">sessão</div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
+      </div>
+
+      {/* Footer helper */}
+      <div className="text-xs text-zinc-500">
+        Dica: se você fechar o navegador, ao voltar o total fica salvo e continua de onde parou.
       </div>
     </div>
   );

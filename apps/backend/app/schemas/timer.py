@@ -19,6 +19,12 @@ class TimerStateResponse(BaseModel):
     started_at: datetime | None = None
     total_closed_seconds: int
 
+    is_finished: bool
+    blocked_reason: str | None = None  # "CLOSED" | "EXPIRED" | None
+
+    end_date: str | None = None        # YYYY-MM-DD (pra UI)
+    closed_at: datetime | None = None  # pra UI
+
 
 class TimeEntryItem(BaseModel):
     id: str

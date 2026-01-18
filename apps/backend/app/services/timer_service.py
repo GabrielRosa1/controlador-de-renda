@@ -64,15 +64,31 @@ def get_total_closed_seconds(db: Session, *, work_id: str) -> int:
 
 
 def get_timer_state(db: Session, *, work_id: str, user_id: str) -> dict:
-    _ = get_work_or_404(db, work_id=work_id, user_id=user_id)
+    w = get_work_or_404(db, work_id=work_id, user_id=user_id)
 
     open_entry = get_open_entry(db, work_id=work_id)
     total_closed = get_total_closed_seconds(db, work_id=work_id)
+
+    blocked_reason: str | None = None
+    is_finished = False
+
+    if w.closed_at is not None:
+        is_finished = True
+        blocked_reason = "CLOSED"
+    elif today_iso_br() > w.end_date:
+        is_finished = True
+        blocked_reason = "EXPIRED"
 
     return {
         "running": open_entry is not None,
         "started_at": open_entry.started_at if open_entry else None,
         "total_closed_seconds": total_closed,
+
+        "is_finished": is_finished,
+        "blocked_reason": blocked_reason,
+
+        "end_date": w.end_date,
+        "closed_at": w.closed_at,
     }
 
 

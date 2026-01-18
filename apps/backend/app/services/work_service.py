@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from services.timer_service import get_work_or_404, get_open_entry
+from app.services.timer_service import get_work_or_404, get_open_entry
 from sqlalchemy.orm import Session
 from app.db.models.work import Work
 

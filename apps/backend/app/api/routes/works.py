@@ -6,6 +6,8 @@ from app.core.errors import bad_request
 from app.db.models.user import User
 from app.db.models.work import Work
 from app.schemas.work import WorkCreateRequest, WorkCreateResponse, WorksListResponse, WorkListItem
+from app.schemas.work_close import WorkCloseRequest, WorkCloseResponse
+from app.services.work_service import close_work
 
 router = APIRouter(prefix="/works", tags=["works"])
 
@@ -57,4 +59,19 @@ def list_works(
             )
             for w in works
         ]
+    )
+
+
+@router.post("/{work_id}/close", response_model=WorkCloseResponse)
+def close_work_route(
+    work_id: str,
+    payload: WorkCloseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    w = close_work(db, work_id=work_id, user_id=current_user.id, reason=payload.reason)
+    return WorkCloseResponse(
+        id=w.id,
+        closed_at=w.closed_at.isoformat(),
+        closed_reason=w.closed_reason,
     )

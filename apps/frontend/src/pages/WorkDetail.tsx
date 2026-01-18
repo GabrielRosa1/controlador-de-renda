@@ -5,6 +5,8 @@ import { listWorks } from "../api/works";
 import { getEntries, getTimerState } from "../api/entries";
 import { formatHMS, formatMoneyBRL } from "../lib/format";
 import type { TimeEntryItem } from "../api/entries";
+import { closeWork } from "../api/workClose";
+
 
 function formatDateTime(dt: string) {
   const d = new Date(dt);
@@ -88,9 +90,14 @@ export default function WorkDetail() {
   }, [rateCents, currentSessionSeconds]);
 
   async function onStart() {
+  try {
     await startTimer(workId);
-    await refreshAll();
+  } catch (e: any) {
+    alert(typeof e?.detail === "string" ? e.detail : "Esse trabalho já terminou");
   }
+  await refreshAll();
+}
+
 
   async function onStop() {
     await stopTimer(workId);
@@ -136,6 +143,17 @@ export default function WorkDetail() {
           ) : (
             <button onClick={onStop}>Stop</button>
           )}
+          <button
+            onClick={async () => {
+                const reason = prompt("Motivo (opcional):") ?? null;
+                await closeWork(workId, reason);
+                await refreshAll();
+            }}
+            style={{ opacity: 0.9 }}
+            >
+            Encerrar trabalho
+            </button>
+
           <button onClick={refreshAll} style={{ opacity: 0.9 }}>
             Atualizar
           </button>

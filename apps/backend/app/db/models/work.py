@@ -2,6 +2,9 @@ import uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, Integer, ForeignKey
 from app.db.base import Base
+from datetime import datetime
+from sqlalchemy import DateTime
+
 
 class Work(Base):
     __tablename__ = "works"
@@ -17,5 +20,8 @@ class Work(Base):
 
     hourly_rate_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(10), default="BRL", nullable=False)
+
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     entries = relationship("TimeEntry", back_populates="work", cascade="all, delete-orphan")

@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
-from app.core.errors import not_found
+from app.core.errors import not_found, bad_request
+from app.utils.time import today_iso_br
 from app.db.models.work import Work
 from app.db.models.time_entry import TimeEntry
 from app.utils.time import seconds_between
@@ -23,7 +24,8 @@ def get_open_entry(db: Session, *, work_id: str) -> TimeEntry | None:
 
 
 def start_timer(db: Session, *, work_id: str, user_id: str) -> tuple[TimeEntry, bool]:
-    _ = get_work_or_404(db, work_id=work_id, user_id=user_id)
+    w = get_work_or_404(db, work_id=work_id, user_id=user_id)
+    ensure_work_is_active(w)
 
     open_entry = get_open_entry(db, work_id=work_id)
     if open_entry:
@@ -99,3 +101,11 @@ def list_entries(db: Session, *, work_id: str, user_id: str, limit: int = 200) -
             }
         )
     return items
+
+
+def ensure_work_is_active(w: Work) -> None:
+    if w.closed_at is not None:
+        raise bad_request("esse trabalho já terminou")
+    # start_date/end_date são strings YYYY-MM-DD -> comparação funciona
+    if today_iso_br() > w.end_date:
+        raise bad_request("esse trabalho já terminou")

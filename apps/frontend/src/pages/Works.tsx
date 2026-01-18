@@ -121,7 +121,7 @@ export default function Works() {
               <label className="text-xs font-medium text-zinc-700">Título</label>
               <input
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
-                placeholder="Ex: SingleHorn"
+                placeholder="Ex: Estágio X"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -131,7 +131,7 @@ export default function Works() {
               <label className="text-xs font-medium text-zinc-700">Sprint</label>
               <input
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
-                placeholder="Ex: Sprint 6"
+                placeholder="Ex: Sprint Y"
                 value={sprint}
                 onChange={(e) => setSprint(e.target.value)}
               />

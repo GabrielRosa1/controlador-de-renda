@@ -255,7 +255,7 @@ import "./index.css";
 
 ## 📄 Licença
 
-Uso pessoal / MVP (defina a licença quando for publicar).
+Uso pessoal / MVP.
 
 ---
 

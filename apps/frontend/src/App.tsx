@@ -17,22 +17,35 @@ function Protected({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const nav = useNavigate();
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const storedTheme = localStorage.getItem("theme");
-    if (storedTheme) return storedTheme === "dark";
-    if (typeof window === "undefined") return false;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-  });
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  function applyTheme(nextIsDark: boolean) {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.classList.toggle("dark", nextIsDark);
+    document.body?.classList.toggle("dark", nextIsDark);
+    root.style.colorScheme = nextIsDark ? "dark" : "light";
+    try {
+      localStorage.setItem("theme", nextIsDark ? "dark" : "light");
+    } catch {
+      // Ignore storage errors (private mode, blocked storage, etc.)
+    }
+  }
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDarkMode) {
-      root.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      root.classList.remove("dark");
-      localStorage.setItem("theme", "light");
+    let initial = false;
+    try {
+      const storedTheme = localStorage.getItem("theme");
+      if (storedTheme) initial = storedTheme === "dark";
+      else initial = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+    } catch {
+      initial = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
     }
+    setIsDarkMode(initial);
+  }, []);
+
+  useEffect(() => {
+    applyTheme(isDarkMode);
   }, [isDarkMode]);
 
   function logout() {
@@ -75,7 +88,13 @@ export default function App() {
                 <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tema</span>
                 <button
                   type="button"
-                  onClick={() => setIsDarkMode((prev) => !prev)}
+                  onClick={() =>
+                    setIsDarkMode((prev) => {
+                      const next = !prev;
+                      applyTheme(next);
+                      return next;
+                    })
+                  }
                   aria-pressed={isDarkMode}
                   aria-label={isDarkMode ? "Ativar modo claro" : "Ativar modo escuro"}
                   className="relative inline-flex h-6 w-11 items-center rounded-full bg-zinc-200 transition hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600"
@@ -83,7 +102,7 @@ export default function App() {
                   <span
                     className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[10px] font-semibold text-zinc-700 shadow transition ${isDarkMode ? "translate-x-5" : "translate-x-1"}`}
                   >
-                    {isDarkMode ? "🌙" : "☀️"}
+                    {isDarkMode ? "" : ""}
                   </span>
                 </button>
               </div>

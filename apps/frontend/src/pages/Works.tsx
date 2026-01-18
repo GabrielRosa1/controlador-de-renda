@@ -1,8 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { createWork, listWorks } from "../api/works";
 import type { WorkListItem } from "../api/works";
 import { formatMoneyBRL } from "../lib/format";
+
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysISO(iso: string, days: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 export default function Works() {
   const [items, setItems] = useState<WorkListItem[]>([]);
@@ -10,11 +27,15 @@ export default function Works() {
   const [err, setErr] = useState<string | null>(null);
 
   // form
+  const defaultStart = useMemo(() => todayISO(), []);
+  const defaultEnd = useMemo(() => addDaysISO(defaultStart, 13), [defaultStart]);
+
   const [title, setTitle] = useState("");
   const [sprint, setSprint] = useState("Sprint 6");
-  const [startDate, setStartDate] = useState("2026-01-18");
-  const [endDate, setEndDate] = useState("2026-01-31");
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
   const [rate, setRate] = useState(3500);
+  const [creating, setCreating] = useState(false);
 
   async function refresh() {
     setErr(null);
@@ -22,8 +43,8 @@ export default function Works() {
     try {
       const res = await listWorks();
       setItems(res.items);
-    } catch (e: any) {
-      setErr("Falha ao carregar trabalhos");
+    } catch {
+      setErr("Falha ao carregar trabalhos.");
     } finally {
       setLoading(false);
     }
@@ -35,65 +56,182 @@ export default function Works() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!title.trim()) return;
+
     setErr(null);
+    setCreating(true);
     try {
       await createWork({
-        title,
-        sprint_name: sprint,
+        title: title.trim(),
+        sprint_name: sprint.trim(),
         start_date: startDate,
         end_date: endDate,
         hourly_rate_cents: rate,
         currency: "BRL",
       });
+
       setTitle("");
       await refresh();
     } catch {
-      setErr("Falha ao criar trabalho");
+      setErr("Falha ao criar trabalho.");
+    } finally {
+      setCreating(false);
     }
   }
 
   const totalRate = useMemo(() => formatMoneyBRL(rate), [rate]);
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <h2>Trabalhos</h2>
-
-      <form onSubmit={onCreate} style={{ display: "grid", gap: 8, padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
-        <strong>Novo trabalho</strong>
-        <input placeholder="Título (ex: SingleHorn)" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <input placeholder="Sprint (ex: Sprint 6)" value={sprint} onChange={(e) => setSprint(e.target.value)} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ flex: 1 }} />
-          <input value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ flex: 1 }} />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Trabalhos</h1>
+          <div className="text-sm text-zinc-600">Crie e acompanhe seus trabalhos com timer e logs.</div>
         </div>
-        <input
-          type="number"
-          value={rate}
-          onChange={(e) => setRate(Number(e.target.value))}
-          placeholder="Valor/hora em centavos (ex: 3500)"
-        />
-        <div style={{ opacity: 0.7 }}>Valor/hora: {totalRate}</div>
-        <button disabled={!title.trim()}>Criar</button>
-      </form>
 
-      {loading && <div>Carregando...</div>}
-      {err && <div style={{ color: "crimson" }}>{err}</div>}
+        <button
+          onClick={refresh}
+          disabled={loading}
+          className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:opacity-50"
+        >
+          Atualizar
+        </button>
+      </div>
 
-      <div style={{ display: "grid", gap: 10 }}>
-        {items.map((w) => (
-          <div key={w.id} style={{ padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{w.title}</div>
-                <div style={{ opacity: 0.7 }}>{w.sprint_name}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div>{formatMoneyBRL(w.hourly_rate_cents)}/h</div>
-                <Link to={`/works/${w.id}`}>Abrir timer</Link>
-              </div>
+      {err ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{err}</div>
+      ) : null}
+
+      {/* Create form */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-zinc-900">Novo trabalho</div>
+            <div className="mt-1 text-xs text-zinc-500">Defina sprint, prazo e valor/hora.</div>
+          </div>
+          <div className="rounded-full bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200">
+            {totalRate}/h
+          </div>
+        </div>
+
+        <form onSubmit={onCreate} className="mt-4 grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700">Título</label>
+              <input
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
+                placeholder="Ex: SingleHorn"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700">Sprint</label>
+              <input
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
+                placeholder="Ex: Sprint 6"
+                value={sprint}
+                onChange={(e) => setSprint(e.target.value)}
+              />
             </div>
           </div>
-        ))}
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700">Início</label>
+              <input
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700">Fim</label>
+              <input
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-700">Valor/hora (centavos)</label>
+              <input
+                type="number"
+                min={0}
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-300 focus:ring-2 focus:ring-zinc-200"
+                value={rate}
+                onChange={(e) => setRate(Number(e.target.value))}
+                placeholder="Ex: 3500"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-zinc-500">
+              Dica: {formatMoneyBRL(rate)} por hora.
+            </div>
+            <button
+              type="submit"
+              disabled={!title.trim() || creating}
+              className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {creating ? "Criando..." : "Criar"}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* List */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-semibold text-zinc-900">Seus trabalhos</h2>
+          <div className="text-xs text-zinc-500">{items.length} itens</div>
+        </div>
+
+        {loading ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <div className="space-y-3">
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+              <div className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+            </div>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-600 shadow-sm">
+            Você ainda não criou nenhum trabalho. Use o formulário acima para começar.
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            {items.map((w) => (
+              <div key={w.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-zinc-900">{w.title}</div>
+                  <div className="mt-1 truncate text-xs text-zinc-500">{w.sprint_name}</div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  <div className="text-right">
+                    <div className="text-sm font-semibold text-zinc-900">{formatMoneyBRL(w.hourly_rate_cents)}/h</div>
+                    <div className="text-xs text-zinc-500">valor/hora</div>
+                  </div>
+
+                  <Link
+                    to={`/works/${w.id}`}
+                    className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50"
+                  >
+                    Abrir timer
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

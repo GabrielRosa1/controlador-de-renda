@@ -23,15 +23,44 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: "system-ui", maxWidth: 980, margin: "0 auto", padding: 16 }}>
-      {isAuthed() && (
-        <header style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/works">Trabalhos</Link>
-          <div style={{ flex: 1 }} />
-          <button onClick={logout}>Sair</button>
-        </header>
-      )}
+  <div className="mx-auto max-w-[980px] px-4 py-4 font-sans">
+    {isAuthed() && (
+      <header className="mb-6 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-sm font-semibold text-white">
+            CR
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-semibold tracking-tight text-zinc-900">Controlador</div>
+            <div className="text-xs text-zinc-500">renda & tempo</div>
+          </div>
+        </div>
+
+        <nav className="flex items-center gap-2">
+          <Link
+            to="/dashboard"
+            className="rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
+          >
+            Dashboard
+          </Link>
+          <Link
+            to="/works"
+            className="rounded-xl px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-900"
+          >
+            Trabalhos
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={logout}
+            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50"
+          >
+            Sair
+          </button>
+        </div>
+      </header>
+    )}
 
       <Routes>
         <Route path="/login" element={<Login />} />

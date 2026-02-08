@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from typing import Dict, List
 
 from sqlalchemy.orm import Session
@@ -21,8 +21,7 @@ def _start_of_day_utc(d: date) -> datetime:
 
 
 def _end_of_day_utc(d: date) -> datetime:
-    # exclusivo (dia seguinte 00:00)
-    return _start_of_day_utc(d).replace()  # placeholder
+    return _start_of_day_utc(d) + timedelta(days=1)
 
 
 @dataclass
@@ -58,6 +57,7 @@ def get_summary(db: Session, *, user_id: str, date_from: str, date_to: str) -> D
         .join(Work, Work.id == TimeEntry.work_id)
         .filter(
             Work.user_id == user_id,
+            TimeEntry.deleted_at.is_(None),
             TimeEntry.ended_at.is_not(None),
             and_(TimeEntry.started_at >= start_dt, TimeEntry.started_at <= end_dt),
         )

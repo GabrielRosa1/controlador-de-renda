@@ -10,7 +10,13 @@ from app.schemas.timer import (
     TimeEntriesResponse,
     TimeEntryItem,
 )
-from app.services.timer_service import start_timer, stop_timer, get_timer_state, list_entries
+from app.services.timer_service import (
+    start_timer,
+    stop_timer,
+    get_timer_state,
+    list_entries,
+    soft_delete_time_entry,
+)
 
 router = APIRouter(prefix="/works", tags=["timer"])
 
@@ -57,3 +63,14 @@ def timer_stop(
     if entry is None:
         return TimerStopResponse(status="not_running")
     return TimerStopResponse(status="stopped", entry_id=entry.id, ended_at=entry.ended_at)
+
+
+@router.delete("/{work_id}/entries/{entry_id}")
+def delete_entry(
+    work_id: str,
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    soft_delete_time_entry(db, work_id=work_id, entry_id=entry_id, user_id=current_user.id)
+    return {"ok": True}

@@ -6,6 +6,7 @@ from app.utils.time import today_iso_br
 from app.db.models.work import Work
 from app.db.models.time_entry import TimeEntry
 from app.utils.time import seconds_between
+from fastapi import HTTPException
 
 
 def _utcnow() -> datetime:
@@ -20,7 +21,15 @@ def get_work_or_404(db: Session, *, work_id: str, user_id: str) -> Work:
 
 
 def get_open_entry(db: Session, *, work_id: str) -> TimeEntry | None:
-    return db.query(TimeEntry).filter(TimeEntry.work_id == work_id, TimeEntry.ended_at.is_(None)).first()
+    return (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.work_id == work_id,
+            TimeEntry.ended_at.is_(None),
+            TimeEntry.deleted_at.is_(None),
+        )
+        .first()
+    )
 
 
 def start_timer(db: Session, *, work_id: str, user_id: str) -> tuple[TimeEntry, bool]:
@@ -54,9 +63,14 @@ def stop_timer(db: Session, *, work_id: str, user_id: str) -> TimeEntry | None:
 def get_total_closed_seconds(db: Session, *, work_id: str) -> int:
     rows = (
         db.query(TimeEntry)
-        .filter(TimeEntry.work_id == work_id, TimeEntry.ended_at.is_not(None))
+        .filter(
+            TimeEntry.work_id == work_id,
+            TimeEntry.ended_at.is_not(None),
+            TimeEntry.deleted_at.is_(None),
+        )
         .all()
     )
+
     total = 0
     for e in rows:
         total += seconds_between(e.started_at, e.ended_at)  # type: ignore[arg-type]
@@ -83,10 +97,8 @@ def get_timer_state(db: Session, *, work_id: str, user_id: str) -> dict:
         "running": open_entry is not None,
         "started_at": open_entry.started_at if open_entry else None,
         "total_closed_seconds": total_closed,
-
         "is_finished": is_finished,
         "blocked_reason": blocked_reason,
-
         "end_date": w.end_date,
         "closed_at": w.closed_at,
     }
@@ -97,7 +109,10 @@ def list_entries(db: Session, *, work_id: str, user_id: str, limit: int = 200) -
 
     entries = (
         db.query(TimeEntry)
-        .filter(TimeEntry.work_id == work_id)
+        .filter(
+            TimeEntry.work_id == work_id,
+            TimeEntry.deleted_at.is_(None),
+        )
         .order_by(TimeEntry.started_at.desc())
         .limit(limit)
         .all()
@@ -122,6 +137,28 @@ def list_entries(db: Session, *, work_id: str, user_id: str, limit: int = 200) -
 def ensure_work_is_active(w: Work) -> None:
     if w.closed_at is not None:
         raise bad_request("esse trabalho já terminou")
-    # start_date/end_date são strings YYYY-MM-DD -> comparação funciona
     if today_iso_br() > w.end_date:
         raise bad_request("esse trabalho já terminou")
+
+
+def soft_delete_time_entry(db: Session, *, work_id: str, entry_id: str, user_id: str) -> None:
+    # garante que o work é do user
+    _ = get_work_or_404(db, work_id=work_id, user_id=user_id)
+
+    entry = (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.id == entry_id,
+            TimeEntry.work_id == work_id,
+            TimeEntry.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="time entry não encontrado")
+    if entry.ended_at is None:
+        raise HTTPException(status_code=400, detail="não é possível apagar uma entry em execução")
+
+
+    entry.deleted_at = _utcnow()
+    db.commit()

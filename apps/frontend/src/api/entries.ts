@@ -31,3 +31,9 @@ export async function getTimerState(workId: string) {
 export async function getEntries(workId: string, limit = 200) {
   return apiFetch<TimeEntriesResponse>(`/works/${workId}/entries?limit=${limit}`);
 }
+
+export async function deleteEntry(workId: string, entryId: string) {
+  return apiFetch<{ ok: boolean }>(`/works/${workId}/entries/${entryId}`, {
+    method: "DELETE",
+  });
+}

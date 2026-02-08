@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { startTimer, stopTimer } from "../api/timer";
 import { listWorks } from "../api/works";
-import { getEntries, getTimerState } from "../api/entries";
+import { deleteEntry, getEntries, getTimerState } from "../api/entries";
 import type { TimeEntryItem, TimerStateResponse } from "../api/entries";
 import { closeWork } from "../api/workClose";
 import { formatHMS, formatMoneyBRL } from "../lib/format";
@@ -44,6 +44,8 @@ export default function WorkDetail() {
   const intervalRef = useRef<number | null>(null);
 
   const [timerState, setTimerState] = useState<TimerStateResponse | null>(null);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function refreshAll() {
     setErr(null);
@@ -127,6 +129,28 @@ export default function WorkDetail() {
       await closeWork(workId, reason);
     } finally {
       await refreshAll();
+    }
+  }
+
+  async function onDeleteEntry(entryId: string, isRunningEntry: boolean) {
+    if (isRunningEntry) {
+      alert("Não é possível apagar uma sessão em execução. Pare o timer primeiro.");
+      return;
+    }
+
+    const ok = window.confirm("Apagar essa sessão? Ela será removida dos totais.");
+    if (!ok) return;
+
+    setDeletingId(entryId);
+    try {
+      await deleteEntry(workId, entryId);
+
+      // ✅ opcional 3: recarrega tudo para garantir totals/estado/lista consistentes
+      await refreshAll();
+    } catch (e: any) {
+      alert(typeof e?.detail === "string" ? e.detail : "Falha ao apagar sessão");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -258,30 +282,42 @@ export default function WorkDetail() {
           <div className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white shadow-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
             {entries.map((e) => {
               const earned = e.ended_at ? Math.round(rateCents * (e.duration_seconds / 3600)) : 0;
+              const isRunningEntry = !e.ended_at;
+
               return (
                 <div key={e.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
                       <div className="font-mono text-sm font-semibold text-zinc-900 dark:text-zinc-100">{formatHMS(e.duration_seconds)}</div>
-                      {!e.ended_at ? (
+                      {isRunningEntry ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-emerald-900">
                           Rodando
                         </span>
                       ) : null}
                     </div>
                     <div className="mt-1 truncate text-sm text-zinc-600 dark:text-zinc-400">
-                      {formatDateTime(e.started_at)}{" "}
-                      {e.ended_at ? `-> ${formatDateTime(e.ended_at)}` : "-> (em andamento)"}
+                      {formatDateTime(e.started_at)} {e.ended_at ? `-> ${formatDateTime(e.ended_at)}` : "-> (em andamento)"}
                     </div>
                   </div>
 
-                  <div className="shrink-0 text-right">
-                    {e.ended_at ? (
-                      <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{formatMoneyBRL(earned)}</div>
-                    ) : (
-                      <div className="text-sm text-zinc-500 dark:text-zinc-400">-</div>
-                    )}
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">sessao</div>
+                  <div className="shrink-0 text-right flex items-center gap-3 justify-end">
+                    <div>
+                      {e.ended_at ? (
+                        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{formatMoneyBRL(earned)}</div>
+                      ) : (
+                        <div className="text-sm text-zinc-500 dark:text-zinc-400">-</div>
+                      )}
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">sessao</div>
+                    </div>
+
+                    <button
+                      onClick={() => onDeleteEntry(e.id, isRunningEntry)}
+                      disabled={isRunningEntry || deletingId === e.id}
+                      title={isRunningEntry ? "Pare o timer para apagar" : "Apagar sessão"}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      {deletingId === e.id ? "…" : "🗑️"}
+                    </button>
                   </div>
                 </div>
               );
